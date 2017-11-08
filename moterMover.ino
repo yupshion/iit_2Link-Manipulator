@@ -16,7 +16,7 @@ volatile int period;  //呼び出し時間間隔
 //左→ #1 GRD
 //中→ #2 Output
 //右→ #3 DC 5V
-const int P[] = {1, 2};
+const int P[] = {1, 0};
 
 //};
 
@@ -26,9 +26,12 @@ const int E1 = 5;
 const int M1 = 4;
 const int E2 = 6;
 const int M2 = 7;
-const float ana2rad = 2*3.141592/360.0 * 330.0 / 1023.0;  //角度定義
+//const float ana2rad = 2*3.141592/360.0 * 330.0 / 1023.0;  //角度定義
+const float ana2rad = 333.3 / 1024;
 volatile float curAngle[2];
-volatile float Kp=1000, Kd=0.3;
+
+//volatile float Kp=1000, Kd=0.3;
+volatile float Kp=0.13, Kd=0.3;
 
 volatile float moter1l[100];
 volatile float moter2l[100];
@@ -66,16 +69,21 @@ volatile int secRoopCount;  //往復分ループ
 
 void debug_analogRead(){
 
-
-    Serial.print("analogRead(P1) = ");
-    Serial.print(analogRead(P[0]));
-    Serial.print("     ");
+    //Serial.println("***********************************");
+//    Serial.print("analogRead(P1) = ");
+//    Serial.print(analogRead(P[0]));
+//    Serial.print("     ");
 
     Serial.print("analogRead(P2) = ");
     Serial.print(analogRead(P[1]));
-    Serial.println("     ");
+    Serial.print("     ");
+
+//    Serial.print("motorAngle[0] = ");
+//    Serial.print(ana2rad * analogRead(P[0]));
+//    Serial.print("     ");
+    Serial.print("motorAngle[1] = ");
+    Serial.println(ana2rad * analogRead(P[1]));
     
-    Serial.println("***********************************");
   
 }
 
@@ -84,12 +92,13 @@ void periodicFunction() {
     unsigned long curMilli; //現在の時間カウント
     
     //msカウントが次の制御を行うタイミングを超えたら
-    if(secCount == targetCount){
+    if(secCount != 10000 ){
         
         //モータ制御用の値
         float motorAngle[] = {0,0};   //モーターの現在位置と
         float targetAngle[] = {0,0};  //モーターの目標位置
         float angleError[] = {0,0}; //角度誤差
+        float oldAngleError[] = {0,0}; //前の角度誤差
         float angleVelo[] = {0,0};  //角速度
         float oldAngle[] = {0,0};  //前角度
         float torque[] = {0,0};  //トルク
@@ -118,60 +127,71 @@ void periodicFunction() {
             
         }       
         
-        //targetAngle[i] = tgtAngle[count2];  //目標角度
+        targetAngle[0] = 180;//tgtAngle[count2];  //目標角度
+        targetAngle[1] = 180;
         
-        
+         debug_analogRead();
         
         //値をセットします
         for(int moterNo =0; moterNo < 2; moterNo++){
 
-            Serial.print("moterNo = ");
-            Serial.println(moterNo);
+
             
-            motorAngle[moterNo] = ana2rad * analogRead(P[0]);  //1ピンから角度を読み込みradian変換
-            Serial.print("motorAngle[moterNo] = ");
-            Serial.println(motorAngle[moterNo]);
-            
-            curAngle[moterNo] = motorAngle[moterNo];  //モーターの角度を現在の角度に保存
-            
+            motorAngle[moterNo] = ana2rad * analogRead(P[moterNo]);  //1ピンから角度を読み込みradian変換            
+            curAngle[moterNo] = motorAngle[moterNo];  //モーターの角度を現在の角度に保存            
             angleError[moterNo] = targetAngle[moterNo] - motorAngle[moterNo];  //角度誤差を算出
-            Serial.print("targetAngle[moterNo] = ");
-            Serial.println(targetAngle[moterNo]);
-            
-            Serial.print("angleError[moterNo] = ");
-            Serial.println(angleError[moterNo]);
-            
             angleVelo[moterNo] = motorAngle[moterNo] - oldAngle[moterNo] * 1000.0;  //角速度を算出
-            Serial.print("angleVelo[moterNo] = ");
-            Serial.println(angleVelo[moterNo]);            
+            //angleVelo[moterNo] = angleError[moterNo] - oldAngleError[moterNo] * 1000.0;  //角速度を算出
             
+            oldAngleError[moterNo] = angleError[moterNo];
             oldAngle[moterNo] = motorAngle[moterNo];  //角度を保存
             
             // Controller calculation
             // 制御計算
-            torque[moterNo] = Kp * angleError[moterNo] - Kd * angleVelo[moterNo];  //誤差角度と角速度からトルクを算出
-            Serial.print("torque[moterNo] = ");
-            Serial.println(torque[moterNo]);     
-
+            torque[moterNo] = Kp * angleError[moterNo];// - Kd * angleVelo[moterNo];  //誤差角度と角速度からトルクを算出
             
+//            
+            Serial.print("moterNo = ");
+            Serial.print(moterNo);
+
+            Serial.print("    motorAngle[] = ");
+            Serial.print(motorAngle[moterNo]);
+//
+            Serial.print("    targetAngle[] = ");
+            Serial.print(targetAngle[moterNo]);
+//
+            Serial.print("    angleError[] = ");
+            Serial.print(angleError[moterNo]);
+//
+//            Serial.print("angleVelo[] = ");
+//            Serial.println(angleVelo[moterNo]);
+            
+            Serial.print("      torque[] = ");
+            Serial.println(torque[moterNo]);     
+            
+             
             // Output to motor driver
             // モータードライバーに書き出し
-            outMotor[moterNo] = (int)torque[moterNo];  //トルクを代入
+            outMotor[moterNo] = -1 * (int)torque[moterNo];  //トルクを代入
         }
       
         //ピンへの書き込み
-        Serial.print("outMotor[0] = " );
-        Serial.print(outMotor[0] );
-        Serial.print("    ");        
+//        Serial.print("outMotor[0] = " );
+//        Serial.print(outMotor[0] );
+//        Serial.print("    ");        
+//
+//        Serial.print("outMotor[1] = " );
+//        Serial.println(outMotor[1] );
+//        Serial.println("    ");
 
-        Serial.print("outMotor[1] = " );
-        Serial.println(outMotor[1] );
-        Serial.println("    ");
+            Serial.print("      outMotor[] = ");
+            Serial.println(outMotor[1]);     
+            
 
-        writePin(outMotor[0], 1); //モーター1への書き込み
-        writePin(outMotor[1], 2); //モーター1への書き込み
+        //writePin(outMotor[0], 1); //モーター1への書き込み
+        writePin(outMotor[1], 2); //モーター2への書き込み
 
-        Serial.println("    ");
+        //Serial.println("    ");
 
 
         //配列用カウンタの更新
@@ -179,6 +199,7 @@ void periodicFunction() {
         if(arrayCount == arrayRoopCount){
             arrayCount = 0;
         }
+        targetCount = getTgtAngle1Sec(arrayCount);
 
     }
 
@@ -189,7 +210,7 @@ void periodicFunction() {
         
     }   
 
-    debug_analogRead();
+   
 
 }    
 
@@ -425,31 +446,35 @@ void setSampleValue(){
   
     for(int i=0; i < 3*2; i++){
         
-        tgtAngle1[i] = 30 * (i + 1);
-        tgtAngle2[i] = 40 * (i + 1);   
+        tgtAngle1[i*2] = 0.3 * (i + 1);
+        tgtAngle2[i*2] = 0.3 * (i + 1);   
+
+        tgtAngle1[i*2 +1] = 180;//30 * (i + 1);
+        tgtAngle2[i*2 +1] = 180;// 40 * (i + 1);   
     }
 }
 
+//*************************************
 //ターゲットアングル1の秒数
 int getTgtAngle1Sec(int idx){
 
-    return getTgtAngle1[idx*2];
+    return tgtAngle1[idx*2];
 }
 
 int getTgtAngle1Deg(int idx){
 
-    return getTgtAngle1[idx*2 +1];
+    return tgtAngle1[idx*2 +1];
 }
 
 //ターゲットアングル2の秒数
 int getTgtAngle2Sec(int idx){
 
-    return getTgtAngle2[idx*2];
+    return tgtAngle2[idx*2];
 }
 
 int getTgtAngle2Deg(int idx){
 
-    return getTgtAngle2[idx*2 +1];
+    return tgtAngle2[idx*2 +1];
 }
 
 //*************************************
@@ -534,6 +559,10 @@ void setup() {
         //tgtCycle = 37;
         //tgtCycle = 1.08 * 1000;
     }
+
+    arrayCount = 0;
+    targetCount = getTgtAngle1Sec(0) * 1000;
+    
     
     //  tgtCycle = 5;  //目標角度
     //  tgtLength = 200;  //目標長さ
